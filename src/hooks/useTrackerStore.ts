@@ -103,6 +103,8 @@ const ACHIEVEMENT_DEFS: Record<string, { id: string; name: string; emoji: string
 
 export { ACHIEVEMENT_DEFS };
 
+// defaultData is the first-time onboarding state: demo content so new users see
+// a populated UI immediately. It is ONLY used when no document exists in MongoDB.
 const defaultData: TrackerData = {
   waterCount: 4,
   waterGoal: 8,
@@ -133,6 +135,41 @@ const defaultData: TrackerData = {
   moodHistory: {},
 
   hasCompletedOnboarding: false,
+  glassSize: 250,
+
+  dailyNotes: {},
+  profile: null,
+  weeklyChallenge: null,
+  waterRemindersEnabled: true,
+};
+
+// emptyData is the true clean-slate used by Reset All. No demo content, no
+// sample habits, no fake streaks — just the bare minimum settings.
+const emptyData: TrackerData = {
+  waterCount: 0,
+  waterGoal: 8,
+  waterHistory: {},
+
+  calorieGoal: 2000,
+  foodLog: [],
+  calorieHistory: {},
+
+  habits: [],
+  habitCompletion: {},
+  habitStreaks: {},
+
+  bedtime: '22:30',
+  wakeTime: '06:00',
+  sleepHistory: {},
+  sleepQualityHistory: {},
+
+  lastActiveDate: getTodayKey(),
+
+  achievements: [],
+  dailyScores: {},
+  moodHistory: {},
+
+  hasCompletedOnboarding: true, // skip onboarding on reset; user already knows the app
   glassSize: 250,
 
   dailyNotes: {},
@@ -191,18 +228,48 @@ function checkAndResetForNewDay(data: TrackerData): TrackerData {
   if (data.lastActiveDate === today) {
     return data;
   }
-  const updated = {
+
+  const prev = data.lastActiveDate; // e.g. "2025-06-08"
+
+  // Archive yesterday's live values into the history maps before resetting.
+  // This ensures the daily score, water count, and calorie total for the last
+  // active day are preserved even when the app was closed overnight.
+  const yesterdayCalories = data.foodLog.reduce((s, f) => s + f.calories, 0);
+  const yesterdayScore = computeDailyScore(data);
+
+  const waterHistoryWithYesterday =
+    prev && data.waterCount > 0
+      ? { ...data.waterHistory, [prev]: data.waterCount }
+      : data.waterHistory;
+
+  const calorieHistoryWithYesterday =
+    prev && yesterdayCalories > 0
+      ? { ...data.calorieHistory, [prev]: yesterdayCalories }
+      : data.calorieHistory;
+
+  const dailyScoresWithYesterday =
+    prev && yesterdayScore > 0
+      ? { ...data.dailyScores, [prev]: yesterdayScore }
+      : data.dailyScores;
+
+  // Build the reset state for the new day.
+  const updated: TrackerData = {
     ...data,
     waterCount: 0,
-    foodLog: [] as FoodItem[],
+    foodLog: [],
+    waterHistory: waterHistoryWithYesterday,
+    calorieHistory: calorieHistoryWithYesterday,
+    dailyScores: dailyScoresWithYesterday,
     habitCompletion: { ...data.habitCompletion },
     lastActiveDate: today,
   };
-  const todayCompletion = updated.habitCompletion[today];
-  if (todayCompletion) {
+
+  // Remove any stale completion entry that might exist for today.
+  if (updated.habitCompletion[today]) {
     const { [today]: _, ...rest } = updated.habitCompletion;
     updated.habitCompletion = rest;
   }
+
   return updated;
 }
 
@@ -509,19 +576,28 @@ export function useTrackerStore() {
   const resetToday = useCallback(() => {
     updateData((prev) => {
       const todayKey = getTodayKey();
+      // Also zero out today's entries in the history maps so Analytics, charts,
+      // streak calculations, and daily score all reflect the reset immediately.
+      const { [todayKey]: _w, ...waterHistoryRest } = prev.waterHistory;
+      const { [todayKey]: _c, ...calorieHistoryRest } = prev.calorieHistory;
+      const { [todayKey]: _s, ...dailyScoresRest } = prev.dailyScores;
       return {
         ...prev,
         waterCount: 0,
         foodLog: [] as FoodItem[],
         habitCompletion: { ...prev.habitCompletion, [todayKey]: {} },
+        waterHistory: waterHistoryRest,
+        calorieHistory: calorieHistoryRest,
+        dailyScores: dailyScoresRest,
       };
     });
   }, [updateData]);
 
   const resetAll = useCallback(() => {
-    const fresh = { ...defaultData, lastActiveDate: getTodayKey() };
+    // Use emptyData (not defaultData) so no demo habits, meals, or fake streaks survive the reset.
+    const fresh = { ...emptyData, lastActiveDate: getTodayKey() };
     setData(fresh);
-    // Immediately persist the reset to MongoDB
+    // Immediately persist the reset to MongoDB (bypass the 500 ms debounce).
     saveToAPI(fresh);
   }, []);
 
@@ -582,7 +658,7 @@ export function useTrackerStore() {
     for (let i = 6; i >= 0; i--) {
       const date = subDays(today, i);
       const key = format(date, 'yyyy-MM-dd');
-      scores.push(data.dailyScores[key] ?? Math.round(Math.random() * 40 + 40));
+      scores.push(data.dailyScores[key] ?? 0);
     }
     return scores;
   })();
@@ -602,16 +678,17 @@ export function useTrackerStore() {
     return heatmap;
   })();
 
-  // Save daily score
+  // Save daily score whenever any tracked value changes.
+  // The guard was previously `dailyScore > 0` which prevented a post-reset score
+  // of 0 from overwriting the stale value in dailyScores. Removed so Analytics
+  // immediately reflects resets and new-day zeroes.
   useEffect(() => {
     if (!isLoaded) return;
     const key = getTodayKey();
-    if (dailyScore > 0) {
-      setData((prev) => ({
-        ...prev,
-        dailyScores: { ...prev.dailyScores, [key]: dailyScore },
-      }));
-    }
+    setData((prev) => ({
+      ...prev,
+      dailyScores: { ...prev.dailyScores, [key]: dailyScore },
+    }));
   }, [data.waterCount, todayCalories, todayHabitsDone, sleepDuration, isLoaded]);
 
   const consumeNewAchievements = useCallback(() => {
