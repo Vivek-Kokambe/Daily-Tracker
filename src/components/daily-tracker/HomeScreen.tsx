@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Droplets, Flame, CheckCircle2, Moon, Bell, TrendingUp, Sun, CloudMoon, BookOpen, Trophy, Sparkles, RotateCcw } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import SettingsDialog from './SettingsDialog';
-import { ACHIEVEMENT_DEFS, type WeeklyChallenge } from '@/hooks/useTrackerStore';
+import { ACHIEVEMENT_DEFS, type WeeklyChallenge, type UserProfile } from '@/hooks/useTrackerStore';
 
 interface HomeScreenProps {
   waterCount: number;
@@ -31,6 +31,10 @@ interface HomeScreenProps {
   onSetDailyNote: (note: string) => void;
   weeklyChallenge: WeeklyChallenge | null;
   onGenerateChallenge: () => void;
+  // Profile / BMI (needed by SettingsDialog)
+  profile: UserProfile | null;
+  onSetProfile: (profile: UserProfile | null) => void;
+  bmi: number | null;
 }
 
 const CARD_STYLE = {
@@ -178,7 +182,8 @@ export default function HomeScreen({
   sleepDuration, bestStreak, waterStreakDays, dailyScore, weeklyScores, achievements,
   timeOfDay, onResetToday, onResetAll, onExportData, onImportData, onCompleteOnboarding,
   todayNote, onSetDailyNote, weeklyChallenge, onGenerateChallenge,
-}: HomeScreenProps) {
+  profile, onSetProfile, bmi,
+  }: HomeScreenProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [showJournal, setShowJournal] = useState(false);
 
@@ -443,7 +448,7 @@ export default function HomeScreen({
           </div>
         </motion.div>
 
-        <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} onResetToday={onResetToday} onResetAll={onResetAll} onExportData={onExportData} onImportData={onImportData} />
+        <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} onResetToday={onResetToday} onResetAll={onResetAll} onExportData={onExportData} onImportData={onImportData} profile={profile} onSetProfile={onSetProfile} bmi={bmi} />
       </motion.div>
     </>
   );

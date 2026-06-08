@@ -158,6 +158,9 @@ function AppContent() {
                   onSetDailyNote={store.setDailyNote}
                   weeklyChallenge={store.weeklyChallenge}
                   onGenerateChallenge={store.generateWeeklyChallenge}
+                  profile={store.profile}
+                  onSetProfile={store.setProfile}
+                  bmi={bmi}
                 />
               )}
               {activeTab === 'water' && (

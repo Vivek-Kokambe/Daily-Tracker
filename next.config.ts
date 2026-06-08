@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  /* config options here */
+  // "standalone" is for self-hosted Docker deploys; remove it for Vercel.
   typescript: {
     ignoreBuildErrors: true,
   },
