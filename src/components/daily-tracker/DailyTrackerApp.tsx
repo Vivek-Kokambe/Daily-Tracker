@@ -183,6 +183,9 @@ function AppContent() {
                   onRemoveFood={store.removeFood}
                   onSetGoal={store.setCalorieGoal}
                   onUndoFood={store.undoFood}
+                  savedFoods={store.savedFoods}
+                  onSaveFoodToLibrary={store.saveFoodToLibrary}
+                  onRemoveSavedFood={store.removeSavedFood}
                 />
               )}
               {activeTab === 'habits' && (

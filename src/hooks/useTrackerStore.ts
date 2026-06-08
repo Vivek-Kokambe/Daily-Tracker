@@ -56,6 +56,7 @@ export interface TrackerData {
   profile: UserProfile | null;
   weeklyChallenge: WeeklyChallenge | null;
   waterRemindersEnabled: boolean;
+  savedFoods: SavedFood[];
 }
 
 export type MoodType = 'happy' | 'neutral' | 'sad';
@@ -66,6 +67,16 @@ export interface UserProfile {
   age: number;
   weight: number; // kg
   height: number; // cm
+}
+
+export interface SavedFood {
+  id: string;
+  name: string;
+  calories: number;
+  serving: string;
+  carbs: number;
+  protein: number;
+  fat: number;
 }
 
 export interface WeeklyChallenge {
@@ -141,6 +152,7 @@ const defaultData: TrackerData = {
   profile: null,
   weeklyChallenge: null,
   waterRemindersEnabled: true,
+  savedFoods: [],
 };
 
 // emptyData is the true clean-slate used by Reset All. No demo content, no
@@ -176,6 +188,7 @@ const emptyData: TrackerData = {
   profile: null,
   weeklyChallenge: null,
   waterRemindersEnabled: true,
+  savedFoods: [],
 };
 
 function getTodayKey(): string {
@@ -197,6 +210,7 @@ function stripMetaFields(raw: Record<string, unknown>): TrackerData {
     profile: (rest.profile as UserProfile | null) ?? null,
     weeklyChallenge: (rest.weeklyChallenge as WeeklyChallenge | null) ?? null,
     waterRemindersEnabled: (rest.waterRemindersEnabled as boolean) ?? true,
+    savedFoods: (rest.savedFoods as SavedFood[]) ?? [],
   };
 }
 
@@ -479,6 +493,25 @@ export function useTrackerStore() {
 
   const setCalorieGoal = useCallback((goal: number) => {
     updateData((prev) => ({ ...prev, calorieGoal: goal }));
+  }, [updateData]);
+
+  // Saved food library actions
+  const saveFoodToLibrary = useCallback((food: Omit<SavedFood, 'id'>) => {
+    updateData((prev) => {
+      const already = prev.savedFoods?.some(
+        (f) => f.name.toLowerCase() === food.name.toLowerCase()
+      );
+      if (already) return prev;
+      const newEntry: SavedFood = { ...food, id: `sf_${Date.now()}` };
+      return { ...prev, savedFoods: [...(prev.savedFoods ?? []), newEntry] };
+    });
+  }, [updateData]);
+
+  const removeSavedFood = useCallback((id: string) => {
+    updateData((prev) => ({
+      ...prev,
+      savedFoods: (prev.savedFoods ?? []).filter((f) => f.id !== id),
+    }));
   }, [updateData]);
 
   // Habit actions
@@ -784,9 +817,13 @@ export function useTrackerStore() {
     addFood,
     undoFood,
     removeFood,
-    setCalorieGoal,
-    todayCalories,
-    // Habits
+  setCalorieGoal,
+  todayCalories,
+  // Saved food library
+  savedFoods: data.savedFoods ?? [],
+  saveFoodToLibrary,
+  removeSavedFood,
+  // Habits
     toggleHabit,
     getHabitCompletion,
     addHabit,
