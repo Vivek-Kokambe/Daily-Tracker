@@ -185,11 +185,12 @@ function getTodayKey(): string {
 // Strip Prisma/Mongo fields that are not part of TrackerData before storing in state.
 function stripMetaFields(raw: Record<string, unknown>): TrackerData {
   const { id: _id, slug: _slug, createdAt: _c, updatedAt: _u, ...rest } = raw;
+  // Use emptyData as the base so no demo content leaks in for missing fields.
   return {
-    ...defaultData,
+    ...emptyData,
     ...(rest as Partial<TrackerData>),
-    habits: (rest.habits as Habit[]) || defaultData.habits,
-    hasCompletedOnboarding: (rest.hasCompletedOnboarding as boolean) ?? false,
+    habits: (rest.habits as Habit[]) ?? [],
+    hasCompletedOnboarding: (rest.hasCompletedOnboarding as boolean) ?? true,
     glassSize: (rest.glassSize as number) ?? 250,
     sleepQualityHistory: (rest.sleepQualityHistory as Record<string, string>) ?? {},
     dailyNotes: (rest.dailyNotes as Record<string, string>) ?? {},
@@ -204,10 +205,12 @@ async function loadFromAPI(): Promise<TrackerData> {
     const res = await fetch('/api/tracker');
     if (!res.ok) throw new Error('Load failed');
     const json = await res.json();
-    if (!json.data) return checkAndResetForNewDay(defaultData);
+    // No document in DB → clean slate (covers the post-resetAll refresh case).
+    if (!json.data) return checkAndResetForNewDay({ ...emptyData, lastActiveDate: getTodayKey() });
     return checkAndResetForNewDay(stripMetaFields(json.data as Record<string, unknown>));
   } catch {
-    return defaultData;
+    // Network error → show clean slate rather than demo content.
+    return { ...emptyData, lastActiveDate: getTodayKey() };
   }
 }
 
@@ -350,7 +353,8 @@ function checkAchievements(data: TrackerData, prevAchievements: string[]): strin
 }
 
 export function useTrackerStore() {
-  const [data, setData] = useState<TrackerData>(defaultData);
+  // Seed with emptyData so nothing renders before the API load resolves.
+  const [data, setData] = useState<TrackerData>({ ...emptyData, lastActiveDate: getTodayKey() });
   const [isLoaded, setIsLoaded] = useState(false);
   const [newAchievements, setNewAchievements] = useState<string[]>([]);
 
