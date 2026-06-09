@@ -116,18 +116,18 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
   const prevDays = period === 'weekly' ? getLast7DaysPrev() : getLast7DaysOffset(2);
 
   const demoWater = useMemo(() => [5, 7, 4, 8, 6, 3, 5, 7, 6, 8, 4, 5, 7, 6, 8, 5, 3, 7, 6, 4, 8, 5, 7, 6, 3, 8, 5, 7, 6, 4], []);
-  const demoCalories = useMemo(() => [1800, 2200, 1500, 1900, 2100, 1700, 1600, 2000, 1850, 1750, 1900, 2100, 1600, 1800, 2200, 1700, 1500, 2000, 1850, 1650, 2100, 1800, 1900, 1700, 2200, 1600, 2000, 1850, 1750, 1900], []);
+  const demoCalories = useMemo(() => [1800, 2200, 1500, 1900, 2100, 1700, 1600, 2000, 1850, 1750, 1900, 2100, 1600, 1800, 2200, 1700, 1500, 2000, 1850, 1650, 2100, 1800, 1900, 1700, 2200, 1600, 2[...], []);
   const demoHabits = useMemo(() => [75, 88, 50, 100, 63, 38, 75, 88, 50, 100, 63, 75, 88, 50, 100, 63, 38, 75, 88, 50, 100, 63, 75, 88, 50, 100, 63, 75, 88, 50], []);
   const demoSleep = useMemo(() => [7.2, 6.8, 8.1, 5.9, 7.5, 6.3, 7.8, 6.5, 8.0, 7.1, 6.9, 7.3, 6.7, 7.9, 5.8, 7.4, 6.2, 8.2, 7.0, 6.6, 7.7, 6.4, 8.0, 7.1, 6.8, 7.5, 6.3, 7.9, 6.7, 7.2], []);
 
   const waterData = useMemo(() => days.map((d, i) => ({ day: d.day, glasses: waterHistory[d.key] ?? demoWater[i % demoWater.length] })), [days, waterHistory, demoWater]);
   const calorieData = useMemo(() => days.map((d, i) => ({ day: d.day, calories: calorieHistory[d.key] ?? demoCalories[i % demoCalories.length] })), [days, calorieHistory, demoCalories]);
-  const habitData = useMemo(() => days.map((d) => { const completion = habitCompletion[d.key] || {}; const total = habits.length; const done = Object.values(completion).filter(Boolean).length; const percentage = total > 0 ? Math.round((done / total) * 100) : 0; return { day: d.day, percentage }; }), [days, habitCompletion, habits.length]);
+  const habitData = useMemo(() => days.map((d) => { const completion = habitCompletion[d.key] || {}; const total = habits.length; const done = Object.values(completion).filter(Boolean).length; const p[...], []);
   const sleepData = useMemo(() => days.map((d, i) => ({ day: d.day, hours: sleepHistory[d.key] ?? demoSleep[i % demoSleep.length] })), [days, sleepHistory, demoSleep]);
 
   // Previous week data for comparison
   const prevWaterData = useMemo(() => prevDays.map((d, i) => ({ day: d.day, glasses: waterHistory[d.key] ?? demoWater[(i + 7) % demoWater.length] })), [prevDays, waterHistory, demoWater]);
-  const prevCalorieData = useMemo(() => prevDays.map((d, i) => ({ day: d.day, calories: calorieHistory[d.key] ?? demoCalories[(i + 7) % demoCalories.length] })), [prevDays, calorieHistory, demoCalories]);
+  const prevCalorieData = useMemo(() => prevDays.map((d, i) => ({ day: d.day, calories: calorieHistory[d.key] ?? demoCalories[(i + 7) % demoCalories.length] })), [prevDays, calorieHistory, demoCalorie[...]);
   const prevSleepData = useMemo(() => prevDays.map((d, i) => ({ day: d.day, hours: sleepHistory[d.key] ?? demoSleep[(i + 7) % demoSleep.length] })), [prevDays, sleepHistory, demoSleep]);
 
   const waterGoalHit = waterData.filter((d) => d.glasses >= waterGoal).length;
@@ -147,10 +147,10 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
   const sleepChange = prevAvgSleep > 0 ? Math.round(((parseFloat(avgSleepHours) - parseFloat(prevAvgSleep)) / parseFloat(prevAvgSleep)) * 100) : 0;
 
   const halfLen = Math.floor(days.length / 2);
-  const waterTrend = waterData.length > 2 ? (() => { const first = waterData.slice(0, halfLen).reduce((s, d) => s + d.glasses, 0) / halfLen; const last = waterData.slice(halfLen).reduce((s, d) => s + d.glasses, 0) / (days.length - halfLen); return first < last ? 'up' : first > last ? 'down' : 'neutral'; })() : 'neutral';
-  const calorieTrend = calorieData.length > 2 ? (() => { const first = calorieData.slice(0, halfLen).reduce((s, d) => s + d.calories, 0) / halfLen; const last = calorieData.slice(halfLen).reduce((s, d) => s + d.calories, 0) / (days.length - halfLen); return first > last ? 'up' : first < last ? 'down' : 'neutral'; })() : 'neutral';
-  const habitTrend = habitData.length > 2 ? (() => { const first = habitData.slice(0, halfLen).reduce((s, d) => s + d.percentage, 0) / halfLen; const last = habitData.slice(halfLen).reduce((s, d) => s + d.percentage, 0) / (days.length - halfLen); return first < last ? 'up' : first > last ? 'down' : 'neutral'; })() : 'neutral';
-  const sleepTrend = sleepData.length > 2 ? (() => { const first = sleepData.slice(0, halfLen).reduce((s, d) => s + d.hours, 0) / halfLen; const last = sleepData.slice(halfLen).reduce((s, d) => s + d.hours, 0) / (days.length - halfLen); return first < last ? 'up' : first > last ? 'down' : 'neutral'; })() : 'neutral';
+  const waterTrend = waterData.length > 2 ? (() => { const first = waterData.slice(0, halfLen).reduce((s, d) => s + d.glasses, 0) / halfLen; const last = waterData.slice(halfLen).reduce((s, d) => s + [...];
+  const calorieTrend = calorieData.length > 2 ? (() => { const first = calorieData.slice(0, halfLen).reduce((s, d) => s + d.calories, 0) / halfLen; const last = calorieData.slice(halfLen).reduce((s, d[...];
+  const habitTrend = habitData.length > 2 ? (() => { const first = habitData.slice(0, halfLen).reduce((s, d) => s + d.percentage, 0) / halfLen; const last = habitData.slice(halfLen).reduce((s, d) => s[...];
+  const sleepTrend = sleepData.length > 2 ? (() => { const first = sleepData.slice(0, halfLen).reduce((s, d) => s + d.hours, 0) / halfLen; const last = sleepData.slice(halfLen).reduce((s, d) => s + d.[...];
 
   const insights = useMemo(() => {
     const result: string[] = [];
@@ -181,7 +181,7 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="px-5 pt-2 pb-20 antialiased">
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md h-60 pointer-events-none" style={{ background: 'radial-gradient(ellipse at top, rgba(59,130,246,0.06) 0%, transparent 70%)' }} />
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md h-60 pointer-events-none" style={{ background: 'radial-gradient(ellipse at top, rgba(59,130,246,0.06) 0%, transparent 70%)' [...]
 
       {/* Header */}
       <motion.div variants={item} className="flex items-center gap-3 mb-4">
@@ -197,15 +197,11 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
       {/* Period Toggle + Comparison Toggle */}
       <motion.div variants={item} className="flex gap-2 mb-4">
         <div className="flex-1 p-1 rounded-xl relative" style={{ backgroundColor: '#1a1a2e', ...CARD_STYLE }}>
-          <motion.div className="absolute top-1 bottom-1 rounded-lg pointer-events-none" style={{ width: 'calc(50% - 4px)', left: period === 'weekly' ? '4px' : 'calc(50% + 4px)', background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(59,130,246,0.1))', transition: 'all 0.3s ease' }} />
-          <button onClick={() => setPeriod('weekly')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all relative z-10 cursor-pointer ${period === 'weekly' ? 'text-white' : 'text-[#8a8a9f]'}`}>
-            Weekly
-          </button>
-          <button onClick={() => setPeriod('monthly')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all relative z-10 cursor-pointer ${period === 'monthly' ? 'text-white' : 'text-[#8a8a9f]'}`}>
-            Monthly
-          </button>
+          <motion.div className="absolute top-1 bottom-1 rounded-lg pointer-events-none" style={{ width: 'calc(50% - 4px)', left: period === 'weekly' ? '4px' : 'calc(50%)', background: 'linear-gradien[...]
+          <button onClick={() => setPeriod('weekly')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all relative z-10 cursor-pointer ${period === 'weekly' ? 'text-white' : 'te[...]
+          <button onClick={() => setPeriod('monthly')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all relative z-10 cursor-pointer ${period === 'monthly' ? 'text-white' : '[...]
         </div>
-        <motion.button whileTap={{ scale: 0.95 }} onClick={() => setComparisonMode(isComparing ? 'this-week' : 'vs-last-week')} className="flex-shrink-0 px-3 py-1.5 rounded-xl text-[10px] font-bold cursor-pointer whitespace-nowrap" style={{ backgroundColor: isComparing ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)', color: isComparing ? '#3b82f6' : '#c8c8d8', border: `1px solid ${isComparing ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.06)'}`, transition: 'all 0.3s ease' }}>
+        <motion.button whileTap={{ scale: 0.95 }} onClick={() => setComparisonMode(isComparing ? 'this-week' : 'vs-last-week')} className="flex-shrink-0 px-3 py-1.5 rounded-xl text-[10px] font-bo[...]
           {isComparing ? '📊 Comparing' : '📊 Compare'}
         </motion.button>
       </motion.div>
@@ -241,7 +237,7 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
 
       {/* Water Chart */}
       <motion.div variants={item} className="rounded-2xl p-4 mb-4" style={{ backgroundColor: '#1a1a2e', ...CARD_STYLE }}>
-        <ChartSummaryCard label="Avg Water" value={avgWater} unit="glasses/day" color="#00b4d8" trend={waterTrend as 'up' | 'down' | 'neutral'} trendLabel={waterTrend === 'up' ? '+12%' : waterTrend === 'down' ? '-8%' : 'Stable'} />
+        <ChartSummaryCard label="Avg Water" value={avgWater} unit="glasses/day" color="#00b4d8" trend={waterTrend as 'up' | 'down' | 'neutral'} trendLabel={waterTrend === 'up' ? '+12%' : waterTrend ==[...]
         <div className="flex items-center gap-2 mb-3">
           <div className="w-3 h-3 rounded-full bg-[#00b4d8]" />
           <h3 className="text-sm font-semibold text-white">Water Intake</h3>
@@ -259,7 +255,7 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
               <YAxis domain={[0, 'auto']} axisLine={false} tickLine={false} tick={tickStyle} width={25} />
               <Tooltip content={<CustomTooltip />} />
               <ReferenceLine y={waterGoal} stroke="#00b4d8" strokeDasharray="4 4" opacity={0.5} />
-              <Area type="monotone" dataKey="glasses" stroke="#00b4d8" strokeWidth={2.5} fill="url(#waterAreaFill)" dot={{ r: 4, fill: '#00b4d8', strokeWidth: 0 }} activeDot={{ r: 6, fill: '#00b4d8', strokeWidth: 0 }} />
+              <Area type="monotone" dataKey="glasses" stroke="#00b4d8" strokeWidth={2.5} fill="url(#waterAreaFill)" dot={{ r: 4, fill: '#00b4d8', strokeWidth: 0 }} activeDot={{ r: 6, fill: '#00b4d8', [...]
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -267,7 +263,7 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
 
       {/* Calorie Chart */}
       <motion.div variants={item} className="rounded-2xl p-4 mb-4" style={{ backgroundColor: '#1a1a2e', ...CARD_STYLE }}>
-        <ChartSummaryCard label="Avg Calories" value={avgCalories} unit="kcal/day" color="#ff6b35" trend={calorieTrend as 'up' | 'down' | 'neutral' | undefined} trendLabel={calorieTrend === 'up' ? 'On Track' : calorieTrend === 'down' ? 'Improving' : 'Stable'} />
+        <ChartSummaryCard label="Avg Calories" value={avgCalories} unit="kcal/day" color="#ff6b35" trend={calorieTrend as 'up' | 'down' | 'neutral' | undefined} trendLabel={calorieTrend === 'up' ? 'On[...]
         <div className="flex items-center gap-2 mb-3">
           <div className="w-3 h-3 rounded-full bg-[#ff6b35]" />
           <h3 className="text-sm font-semibold text-white">Calorie Intake</h3>
@@ -291,7 +287,7 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
 
       {/* Habit Chart */}
       <motion.div variants={item} className="rounded-2xl p-4 mb-4" style={{ backgroundColor: '#1a1a2e', ...CARD_STYLE }}>
-        <ChartSummaryCard label="Avg Completion" value={avgHabitPercent} unit="%" color="#4caf50" trend={habitTrend as 'up' | 'down' | 'neutral' | undefined} trendLabel={habitTrend === 'up' ? 'Improving' : habitTrend === 'down' ? 'Declining' : 'Stable'} />
+        <ChartSummaryCard label="Avg Completion" value={avgHabitPercent} unit="%" color="#4caf50" trend={habitTrend as 'up' | 'down' | 'neutral' | undefined} trendLabel={habitTrend === 'up' ? 'Improvi[...]
         <div className="flex items-center gap-2 mb-3">
           <div className="w-3 h-3 rounded-full bg-[#4caf50]" />
           <h3 className="text-sm font-semibold text-white">Habit Completion</h3>
@@ -316,7 +312,7 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
 
       {/* Sleep Chart */}
       <motion.div variants={item} className="rounded-2xl p-4 mb-4" style={{ backgroundColor: '#1a1a2e', ...CARD_STYLE }}>
-        <ChartSummaryCard label="Avg Sleep" value={avgSleepHours} unit="hrs/night" color="#9c27b0" trend={sleepTrend as 'up' | 'down' | 'neutral' | undefined} trendLabel={sleepTrend === 'up' ? 'Improving' : sleepTrend === 'down' ? 'Declining' : 'Stable'} />
+        <ChartSummaryCard label="Avg Sleep" value={avgSleepHours} unit="hrs/night" color="#9c27b0" trend={sleepTrend as 'up' | 'down' | 'neutral' | undefined} trendLabel={sleepTrend === 'up' ? 'Improv[...]
         <div className="flex items-center gap-2 mb-3">
           <div className="w-3 h-3 rounded-full bg-[#9c27b0]" />
           <h3 className="text-sm font-semibold text-white">Sleep Quality</h3>
@@ -338,14 +334,14 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
       </motion.div>
 
       {/* AI Insights with typewriter effect */}
-      <motion.div variants={item} className="rounded-2xl p-4 mb-4 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, rgba(59,130,246,0.08), rgba(59,130,246,0.03))', border: '1px solid rgba(59,130,246,0.2)' }}>
+      <motion.div variants={item} className="rounded-2xl p-4 mb-4 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, rgba(59,130,246,0.08), rgba(59,130,246,0.03))', border: '1px s[...]
         <div className="flex items-center gap-2 mb-3">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'rgba(59,130,246,0.15)' }}><Brain size={14} className="text-[#3b82f6]" /></div>
           <h3 className="text-sm font-bold text-white" style={{ letterSpacing: '0.01em' }}>AI Insights</h3>
         </div>
         <div className="flex flex-col gap-2">
           {insights.slice(0, visibleInsights).map((insight, idx) => (
-            <motion.p key={idx} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="text-[11px] font-normal leading-relaxed" style={{ color: '#c8c8d8' }}>
+            <motion.p key={idx} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="text-[11px] font-normal leading-relaxed animate-cursor-blink" styl[...]
               {insight}
             </motion.p>
           ))}
@@ -353,7 +349,7 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
       </motion.div>
 
       {/* Success Message */}
-      <motion.div variants={item} className="rounded-2xl p-4 flex items-center gap-3" style={{ background: 'linear-gradient(135deg, rgba(0,180,216,0.1), rgba(0,180,216,0.05))', border: '1px solid rgba(0,180,216,0.2)' }}>
+      <motion.div variants={item} className="rounded-2xl p-4 flex items-center gap-3" style={{ background: 'linear-gradient(135deg, rgba(0,180,216,0.1), rgba(0,180,216,0.05))', border: '1px solid rgba[...]
         <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(0,180,216,0.15)' }}><TrendingUp size={20} className="text-[#00b4d8]" /></div>
         <div>
           <p className="text-sm font-semibold text-white">You hit your water goal {waterGoalHit}/{period === 'weekly' ? 7 : 30} days!</p>
