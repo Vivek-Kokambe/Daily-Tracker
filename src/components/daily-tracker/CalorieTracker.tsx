@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Flame, Plus, Trash2, Search, Target, Utensils, AlertTriangle, Zap } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { FoodItem } from '@/hooks/useTrackerStore';
+import { FoodItem, SavedFood } from '@/hooks/useTrackerStore';
 import AddFoodDialog from './AddFoodDialog';
 
 interface CalorieTrackerProps {
@@ -15,6 +15,9 @@ interface CalorieTrackerProps {
   onRemoveFood: (id: string) => void;
   onSetGoal: (goal: number) => void;
   onUndoFood: () => void;
+  savedFoods: SavedFood[];
+  onSaveFoodToLibrary: (food: Omit<SavedFood, 'id'>) => void;
+  onRemoveSavedFood: (id: string) => void;
 }
 
 const CARD_STYLE = {
@@ -112,7 +115,7 @@ function NutritionDonut({ carbs, protein, fat }: { carbs: number; protein: numbe
   );
 }
 
-export default function CalorieTracker({ calorieGoal, foodLog, todayCalories, onAddFood, onRemoveFood, onSetGoal, onUndoFood }: CalorieTrackerProps) {
+export default function CalorieTracker({ calorieGoal, foodLog, todayCalories, onAddFood, onRemoveFood, onSetGoal, onUndoFood, savedFoods, onSaveFoodToLibrary, onRemoveSavedFood }: CalorieTrackerProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showGoalEditor, setShowGoalEditor] = useState(false);
   const [goalInput, setGoalInput] = useState(calorieGoal.toString());
@@ -283,7 +286,7 @@ export default function CalorieTracker({ calorieGoal, foodLog, todayCalories, on
         </button>
       </motion.div>
     </motion.div>
-    <AddFoodDialog open={showAddDialog} onClose={() => setShowAddDialog(false)} onAdd={onAddFood} />
+    <AddFoodDialog open={showAddDialog} onClose={() => setShowAddDialog(false)} onAdd={onAddFood} savedFoods={savedFoods} onSaveFoodToLibrary={onSaveFoodToLibrary} onRemoveSavedFood={onRemoveSavedFood} />
     </>
   );
 }

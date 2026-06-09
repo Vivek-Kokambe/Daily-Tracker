@@ -1,32 +1,48 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+model Tracker {
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  slug String @unique
 
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
+  // Full TrackerData stored as JSON
+  waterCount     Int
+  waterGoal      Int
+  waterHistory   Json
+
+  calorieGoal    Int
+  foodLog        Json
+  calorieHistory Json
+
+  habits          Json
+  habitCompletion Json
+  habitStreaks    Json
+
+  bedtime              String
+  wakeTime             String
+  sleepHistory         Json
+  sleepQualityHistory  Json
+
+  lastActiveDate String
+
+  achievements  Json
+  dailyScores   Json
+  moodHistory   Json
+
+  hasCompletedOnboarding Boolean
+  glassSize              Int
+
+  dailyNotes           Json
+  profile              Json?
+  weeklyChallenge      Json?
+  waterRemindersEnabled Boolean
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

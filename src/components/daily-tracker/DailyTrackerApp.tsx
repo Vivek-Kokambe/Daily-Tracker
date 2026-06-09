@@ -158,6 +158,9 @@ function AppContent() {
                   onSetDailyNote={store.setDailyNote}
                   weeklyChallenge={store.weeklyChallenge}
                   onGenerateChallenge={store.generateWeeklyChallenge}
+                  profile={store.profile}
+                  onSetProfile={store.setProfile}
+                  bmi={bmi}
                 />
               )}
               {activeTab === 'water' && (
@@ -180,6 +183,9 @@ function AppContent() {
                   onRemoveFood={store.removeFood}
                   onSetGoal={store.setCalorieGoal}
                   onUndoFood={store.undoFood}
+                  savedFoods={store.savedFoods}
+                  onSaveFoodToLibrary={store.saveFoodToLibrary}
+                  onRemoveSavedFood={store.removeSavedFood}
                 />
               )}
               {activeTab === 'habits' && (

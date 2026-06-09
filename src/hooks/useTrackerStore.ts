@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { format, subDays } from 'date-fns';
 
 export interface FoodItem {
@@ -56,6 +56,7 @@ export interface TrackerData {
   profile: UserProfile | null;
   weeklyChallenge: WeeklyChallenge | null;
   waterRemindersEnabled: boolean;
+  savedFoods: SavedFood[];
 }
 
 export type MoodType = 'happy' | 'neutral' | 'sad';
@@ -68,19 +69,27 @@ export interface UserProfile {
   height: number; // cm
 }
 
+export interface SavedFood {
+  id: string;
+  name: string;
+  calories: number;
+  serving: string;
+  carbs: number;
+  protein: number;
+  fat: number;
+}
+
 export interface WeeklyChallenge {
   id: string;
   title: string;
   description: string;
   emoji: string;
   target: number; // days to complete
-   completedDays: number;
+  completedDays: number;
   startDate: string; // yyyy-MM-dd
   isActive: boolean;
   isCompleted: boolean;
 }
-
-const STORAGE_KEY = 'daily-tracker-data';
 
 const defaultHabits: Habit[] = [
   { id: 'h1', title: 'Morning Meditation', category: 'morning', streak: 12 },
@@ -105,6 +114,8 @@ const ACHIEVEMENT_DEFS: Record<string, { id: string; name: string; emoji: string
 
 export { ACHIEVEMENT_DEFS };
 
+// defaultData is the first-time onboarding state: demo content so new users see
+// a populated UI immediately. It is ONLY used when no document exists in MongoDB.
 const defaultData: TrackerData = {
   waterCount: 4,
   waterGoal: 8,
@@ -141,41 +152,91 @@ const defaultData: TrackerData = {
   profile: null,
   weeklyChallenge: null,
   waterRemindersEnabled: true,
+  savedFoods: [],
+};
+
+// emptyData is the true clean-slate used by Reset All. No demo content, no
+// sample habits, no fake streaks — just the bare minimum settings.
+const emptyData: TrackerData = {
+  waterCount: 0,
+  waterGoal: 8,
+  waterHistory: {},
+
+  calorieGoal: 2000,
+  foodLog: [],
+  calorieHistory: {},
+
+  habits: [],
+  habitCompletion: {},
+  habitStreaks: {},
+
+  bedtime: '22:30',
+  wakeTime: '06:00',
+  sleepHistory: {},
+  sleepQualityHistory: {},
+
+  lastActiveDate: getTodayKey(),
+
+  achievements: [],
+  dailyScores: {},
+  moodHistory: {},
+
+  hasCompletedOnboarding: true, // skip onboarding on reset; user already knows the app
+  glassSize: 250,
+
+  dailyNotes: {},
+  profile: null,
+  weeklyChallenge: null,
+  waterRemindersEnabled: true,
+  savedFoods: [],
 };
 
 function getTodayKey(): string {
   return format(new Date(), 'yyyy-MM-dd');
 }
 
-function loadFromStorage(): TrackerData {
-  if (typeof window === 'undefined') return defaultData;
+// Strip Prisma/Mongo fields that are not part of TrackerData before storing in state.
+function stripMetaFields(raw: Record<string, unknown>): TrackerData {
+  const { id: _id, slug: _slug, createdAt: _c, updatedAt: _u, ...rest } = raw;
+  // Use emptyData as the base so no demo content leaks in for missing fields.
+  return {
+    ...emptyData,
+    ...(rest as Partial<TrackerData>),
+    habits: (rest.habits as Habit[]) ?? [],
+    hasCompletedOnboarding: (rest.hasCompletedOnboarding as boolean) ?? true,
+    glassSize: (rest.glassSize as number) ?? 250,
+    sleepQualityHistory: (rest.sleepQualityHistory as Record<string, string>) ?? {},
+    dailyNotes: (rest.dailyNotes as Record<string, string>) ?? {},
+    profile: (rest.profile as UserProfile | null) ?? null,
+    weeklyChallenge: (rest.weeklyChallenge as WeeklyChallenge | null) ?? null,
+    waterRemindersEnabled: (rest.waterRemindersEnabled as boolean) ?? true,
+    savedFoods: (rest.savedFoods as SavedFood[]) ?? [],
+  };
+}
+
+async function loadFromAPI(): Promise<TrackerData> {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return defaultData;
-    const parsed = JSON.parse(stored) as TrackerData;
-    return {
-      ...defaultData,
-      ...parsed,
-      habits: parsed.habits || defaultData.habits,
-      hasCompletedOnboarding: parsed.hasCompletedOnboarding ?? false,
-      glassSize: parsed.glassSize ?? 250,
-      sleepQualityHistory: parsed.sleepQualityHistory ?? {},
-      dailyNotes: parsed.dailyNotes ?? {},
-      profile: parsed.profile ?? null,
-      weeklyChallenge: parsed.weeklyChallenge ?? null,
-      waterRemindersEnabled: parsed.waterRemindersEnabled ?? true,
-    };
+    const res = await fetch('/api/tracker');
+    if (!res.ok) throw new Error('Load failed');
+    const json = await res.json();
+    // No document in DB → clean slate (covers the post-resetAll refresh case).
+    if (!json.data) return checkAndResetForNewDay({ ...emptyData, lastActiveDate: getTodayKey() });
+    return checkAndResetForNewDay(stripMetaFields(json.data as Record<string, unknown>));
   } catch {
-    return defaultData;
+    // Network error → show clean slate rather than demo content.
+    return { ...emptyData, lastActiveDate: getTodayKey() };
   }
 }
 
-function saveToStorage(data: TrackerData): void {
-  if (typeof window === 'undefined') return;
+async function saveToAPI(data: TrackerData): Promise<void> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    await fetch('/api/tracker', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
   } catch {
-    // Storage full or unavailable
+    // Network unavailable — silently ignore, data remains in React state.
   }
 }
 
@@ -185,22 +246,47 @@ function checkAndResetForNewDay(data: TrackerData): TrackerData {
     return data;
   }
 
-  // New day detected — reset daily data
-  const updated = {
+  const prev = data.lastActiveDate; // e.g. "2025-06-08"
+
+  // Archive yesterday's live values into the history maps before resetting.
+  // This ensures the daily score, water count, and calorie total for the last
+  // active day are preserved even when the app was closed overnight.
+  const yesterdayCalories = data.foodLog.reduce((s, f) => s + f.calories, 0);
+  const yesterdayScore = computeDailyScore(data);
+
+  const waterHistoryWithYesterday =
+    prev && data.waterCount > 0
+      ? { ...data.waterHistory, [prev]: data.waterCount }
+      : data.waterHistory;
+
+  const calorieHistoryWithYesterday =
+    prev && yesterdayCalories > 0
+      ? { ...data.calorieHistory, [prev]: yesterdayCalories }
+      : data.calorieHistory;
+
+  const dailyScoresWithYesterday =
+    prev && yesterdayScore > 0
+      ? { ...data.dailyScores, [prev]: yesterdayScore }
+      : data.dailyScores;
+
+  // Build the reset state for the new day.
+  const updated: TrackerData = {
     ...data,
     waterCount: 0,
-    foodLog: [] as FoodItem[],
-    habitCompletion: {
-      ...data.habitCompletion,
-    },
+    foodLog: [],
+    waterHistory: waterHistoryWithYesterday,
+    calorieHistory: calorieHistoryWithYesterday,
+    dailyScores: dailyScoresWithYesterday,
+    habitCompletion: { ...data.habitCompletion },
     lastActiveDate: today,
   };
-  // Remove today's key from habitCompletion if present
-  const todayCompletion = updated.habitCompletion[today];
-  if (todayCompletion) {
+
+  // Remove any stale completion entry that might exist for today.
+  if (updated.habitCompletion[today]) {
     const { [today]: _, ...rest } = updated.habitCompletion;
     updated.habitCompletion = rest;
   }
+
   return updated;
 }
 
@@ -223,12 +309,10 @@ function checkAchievements(data: TrackerData, prevAchievements: string[]): strin
   const has = (id: string) => newOnes.includes(id);
   const todayKey = getTodayKey();
 
-  // First Glass: ever logged water
   if (!has('first_glass') && data.waterCount >= 1) {
     newOnes.push('first_glass');
   }
 
-  // Hydration Hero: 7 days meeting water goal
   if (!has('hydration_hero')) {
     let daysMet = 0;
     const today = new Date();
@@ -243,7 +327,6 @@ function checkAchievements(data: TrackerData, prevAchievements: string[]): strin
     if (daysMet >= 7) newOnes.push('hydration_hero');
   }
 
-  // Early Bird: complete all morning habits today
   if (!has('early_bird')) {
     const morningHabits = data.habits.filter((h) => h.category === 'morning');
     const morningDone = morningHabits.filter((h) => data.habitCompletion[todayKey]?.[h.id]).length;
@@ -252,7 +335,6 @@ function checkAchievements(data: TrackerData, prevAchievements: string[]): strin
     }
   }
 
-  // Night Owl: complete all bedtime habits today
   if (!has('night_owl')) {
     const bedtimeHabits = data.habits.filter((h) => h.category === 'bedtime');
     const bedtimeDone = bedtimeHabits.filter((h) => data.habitCompletion[todayKey]?.[h.id]).length;
@@ -261,19 +343,16 @@ function checkAchievements(data: TrackerData, prevAchievements: string[]): strin
     }
   }
 
-  // Perfect Day: all trackers at 100%
   if (!has('perfect_day')) {
     const score = computeDailyScore(data);
     if (score >= 100) newOnes.push('perfect_day');
   }
 
-  // 7-Day Streak: any habit with streak >= 7
   if (!has('seven_streak')) {
     const hasLongStreak = data.habits.some((h) => h.streak >= 7);
     if (hasLongStreak) newOnes.push('seven_streak');
   }
 
-  // Data Master: logged data for 30 days
   if (!has('data_master')) {
     const totalDays = new Set([
       ...Object.keys(data.waterHistory),
@@ -287,28 +366,42 @@ function checkAchievements(data: TrackerData, prevAchievements: string[]): strin
   return newOnes;
 }
 
-let hasLoadedFromStorage = false;
-
 export function useTrackerStore() {
-  const [data, setData] = useState<TrackerData>(() => {
-    if (typeof window === 'undefined') return defaultData;
-    if (hasLoadedFromStorage) return loadFromStorage();
-    hasLoadedFromStorage = true;
-    const loaded = loadFromStorage();
-    return checkAndResetForNewDay(loaded);
-  });
-  const [isLoaded] = useState(true);
+  // Seed with emptyData so nothing renders before the API load resolves.
+  const [data, setData] = useState<TrackerData>({ ...emptyData, lastActiveDate: getTodayKey() });
+  const [isLoaded, setIsLoaded] = useState(false);
   const [newAchievements, setNewAchievements] = useState<string[]>([]);
 
-  // Persist to localStorage when data changes
+  // Debounce timer ref for saves
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load from MongoDB on mount
   useEffect(() => {
-    saveToStorage(data);
-  }, [data]);
+    let cancelled = false;
+    loadFromAPI().then((loaded) => {
+      if (!cancelled) {
+        setData(loaded);
+        setIsLoaded(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Persist to MongoDB whenever data changes (debounced 500 ms)
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveToAPI(data);
+    }, 500);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [data, isLoaded]);
 
   const updateData = useCallback((updater: (prev: TrackerData) => TrackerData) => {
     setData((prev) => {
       const next = updater(prev);
-      // Check for new achievements
       const updatedAchievements = checkAchievements(next, prev.achievements);
       if (updatedAchievements.length > prev.achievements.length) {
         const justUnlocked = updatedAchievements.filter((a) => !prev.achievements.includes(a));
@@ -350,7 +443,6 @@ export function useTrackerStore() {
     updateData((prev) => ({ ...prev, waterGoal: goal }));
   }, [updateData]);
 
-  // Glass size
   const setGlassSize = useCallback((size: number) => {
     updateData((prev) => ({ ...prev, glassSize: size }));
   }, [updateData]);
@@ -403,6 +495,25 @@ export function useTrackerStore() {
     updateData((prev) => ({ ...prev, calorieGoal: goal }));
   }, [updateData]);
 
+  // Saved food library actions
+  const saveFoodToLibrary = useCallback((food: Omit<SavedFood, 'id'>) => {
+    updateData((prev) => {
+      const already = prev.savedFoods?.some(
+        (f) => f.name.toLowerCase() === food.name.toLowerCase()
+      );
+      if (already) return prev;
+      const newEntry: SavedFood = { ...food, id: `sf_${Date.now()}` };
+      return { ...prev, savedFoods: [...(prev.savedFoods ?? []), newEntry] };
+    });
+  }, [updateData]);
+
+  const removeSavedFood = useCallback((id: string) => {
+    updateData((prev) => ({
+      ...prev,
+      savedFoods: (prev.savedFoods ?? []).filter((f) => f.id !== id),
+    }));
+  }, [updateData]);
+
   // Habit actions
   const toggleHabit = useCallback((habitId: string) => {
     updateData((prev) => {
@@ -410,18 +521,13 @@ export function useTrackerStore() {
       const todayCompletion = prev.habitCompletion[todayKey] || {};
       const wasCompleted = todayCompletion[habitId] || false;
       const newCompletion = !wasCompleted;
-
       const habit = prev.habits.find((h) => h.id === habitId);
       const currentStreak = habit?.streak || 0;
-
       return {
         ...prev,
         habitCompletion: {
           ...prev.habitCompletion,
-          [todayKey]: {
-            ...todayCompletion,
-            [habitId]: newCompletion,
-          },
+          [todayKey]: { ...todayCompletion, [habitId]: newCompletion },
         },
         habits: prev.habits.map((h) =>
           h.id === habitId
@@ -440,7 +546,6 @@ export function useTrackerStore() {
     [data.habitCompletion]
   );
 
-  // Add custom habit
   const addHabit = useCallback((habit: Omit<Habit, 'id' | 'streak'>) => {
     updateData((prev) => {
       const id = `h_${Date.now()}`;
@@ -449,7 +554,6 @@ export function useTrackerStore() {
     });
   }, [updateData]);
 
-  // Remove habit
   const removeHabit = useCallback((habitId: string) => {
     updateData((prev) => ({
       ...prev,
@@ -461,14 +565,11 @@ export function useTrackerStore() {
   const setMood = useCallback((mood: MoodType) => {
     updateData((prev) => {
       const todayKey = getTodayKey();
-      return {
-        ...prev,
-        moodHistory: { ...prev.moodHistory, [todayKey]: mood },
-      };
+      return { ...prev, moodHistory: { ...prev.moodHistory, [todayKey]: mood } };
     });
   }, [updateData]);
 
-  const todayMood: MoodType | null = data.moodHistory[getTodayKey()] || null;
+  const todayMood: MoodType | null = data.moodHistory[getTodayKey()] as MoodType || null;
 
   // Sleep actions
   const setBedtime = useCallback((time: string) => {
@@ -485,16 +586,10 @@ export function useTrackerStore() {
       const wakeParts = prev.wakeTime.split(':').map(Number);
       let bedtimeHours = bedtimeParts[0] + bedtimeParts[1] / 60;
       let wakeHours = wakeParts[0] + wakeParts[1] / 60;
-
-      if (wakeHours < bedtimeHours) {
-        wakeHours += 24;
-      }
+      if (wakeHours < bedtimeHours) wakeHours += 24;
       const sleepHours = parseFloat((wakeHours - bedtimeHours).toFixed(1));
       const todayKey = getTodayKey();
-      return {
-        ...prev,
-        sleepHistory: { ...prev.sleepHistory, [todayKey]: sleepHours },
-      };
+      return { ...prev, sleepHistory: { ...prev.sleepHistory, [todayKey]: sleepHours } };
     });
   }, [updateData]);
 
@@ -502,14 +597,12 @@ export function useTrackerStore() {
   const setSleepQuality = useCallback((quality: SleepQualityType) => {
     updateData((prev) => {
       const todayKey = getTodayKey();
-      return {
-        ...prev,
-        sleepQualityHistory: { ...prev.sleepQualityHistory, [todayKey]: quality },
-      };
+      return { ...prev, sleepQualityHistory: { ...prev.sleepQualityHistory, [todayKey]: quality } };
     });
   }, [updateData]);
 
-  const todaySleepQuality: SleepQualityType | null = (data.sleepQualityHistory[getTodayKey()] as SleepQualityType) || null;
+  const todaySleepQuality: SleepQualityType | null =
+    (data.sleepQualityHistory[getTodayKey()] as SleepQualityType) || null;
 
   // Onboarding
   const completeOnboarding = useCallback(() => {
@@ -520,23 +613,29 @@ export function useTrackerStore() {
   const resetToday = useCallback(() => {
     updateData((prev) => {
       const todayKey = getTodayKey();
+      // Also zero out today's entries in the history maps so Analytics, charts,
+      // streak calculations, and daily score all reflect the reset immediately.
+      const { [todayKey]: _w, ...waterHistoryRest } = prev.waterHistory;
+      const { [todayKey]: _c, ...calorieHistoryRest } = prev.calorieHistory;
+      const { [todayKey]: _s, ...dailyScoresRest } = prev.dailyScores;
       return {
         ...prev,
         waterCount: 0,
         foodLog: [] as FoodItem[],
-        habitCompletion: {
-          ...prev.habitCompletion,
-          [todayKey]: {},
-        },
+        habitCompletion: { ...prev.habitCompletion, [todayKey]: {} },
+        waterHistory: waterHistoryRest,
+        calorieHistory: calorieHistoryRest,
+        dailyScores: dailyScoresRest,
       };
     });
   }, [updateData]);
 
   const resetAll = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem(STORAGE_KEY);
-    hasLoadedFromStorage = false;
-    setData({ ...defaultData, lastActiveDate: getTodayKey() });
+    // Use emptyData (not defaultData) so no demo habits, meals, or fake streaks survive the reset.
+    const fresh = { ...emptyData, lastActiveDate: getTodayKey() };
+    setData(fresh);
+    // Immediately persist the reset to MongoDB (bypass the 500 ms debounce).
+    saveToAPI(fresh);
   }, []);
 
   // Export data
@@ -548,19 +647,21 @@ export function useTrackerStore() {
   const importData = useCallback((jsonStr: string) => {
     try {
       const imported = JSON.parse(jsonStr) as TrackerData;
-      updateData(() => ({
+      const merged: TrackerData = {
         ...defaultData,
         ...imported,
         habits: imported.habits || defaultData.habits,
         hasCompletedOnboarding: true,
         glassSize: imported.glassSize ?? 250,
         sleepQualityHistory: imported.sleepQualityHistory ?? {},
-      }));
+      };
+      setData(merged);
+      saveToAPI(merged);
       return true;
     } catch {
       return false;
     }
-  }, [updateData]);
+  }, []);
 
   // Computed values
   const todayKey = getTodayKey();
@@ -571,13 +672,10 @@ export function useTrackerStore() {
   const waterGoalReached = data.waterCount >= data.waterGoal;
   const sleepDuration = data.sleepHistory[todayKey] ?? 7.5;
 
-  // Daily score
   const dailyScore = computeDailyScore(data);
 
-  // Streak calculations
   const bestStreak = data.habits.length > 0 ? Math.max(...data.habits.map((h) => h.streak)) : 0;
 
-  // Water streak: count consecutive days ending at yesterday where water >= waterGoal
   const waterStreakDays = (() => {
     let streak = 0;
     const today = new Date();
@@ -585,28 +683,23 @@ export function useTrackerStore() {
       const date = subDays(today, i);
       const key = format(date, 'yyyy-MM-dd');
       const val = data.waterHistory[key];
-      if (val !== undefined && val >= data.waterGoal) {
-        streak++;
-      } else {
-        break;
-      }
+      if (val !== undefined && val >= data.waterGoal) streak++;
+      else break;
     }
     return streak;
   })();
 
-  // Get weekly score history for sparkline
   const weeklyScores = (() => {
     const scores: number[] = [];
     const today = new Date();
     for (let i = 6; i >= 0; i--) {
       const date = subDays(today, i);
       const key = format(date, 'yyyy-MM-dd');
-      scores.push(data.dailyScores[key] ?? Math.round(Math.random() * 40 + 40));
+      scores.push(data.dailyScores[key] ?? 0);
     }
     return scores;
   })();
 
-  // Get habit heatmap data for last 35 days (5 weeks × 7 days)
   const habitHeatmapData = (() => {
     const heatmap: { key: string; date: string; completionRate: number }[] = [];
     const today = new Date();
@@ -622,18 +715,19 @@ export function useTrackerStore() {
     return heatmap;
   })();
 
-  // Save daily score periodically
+  // Save daily score whenever any tracked value changes.
+  // The guard was previously `dailyScore > 0` which prevented a post-reset score
+  // of 0 from overwriting the stale value in dailyScores. Removed so Analytics
+  // immediately reflects resets and new-day zeroes.
   useEffect(() => {
-    const todayKey = getTodayKey();
-    if (dailyScore > 0) {
-      setData((prev) => ({
-        ...prev,
-        dailyScores: { ...prev.dailyScores, [todayKey]: dailyScore },
-      }));
-    }
-  }, [data.waterCount, todayCalories, todayHabitsDone, sleepDuration]);
+    if (!isLoaded) return;
+    const key = getTodayKey();
+    setData((prev) => ({
+      ...prev,
+      dailyScores: { ...prev.dailyScores, [key]: dailyScore },
+    }));
+  }, [data.waterCount, todayCalories, todayHabitsDone, sleepDuration, isLoaded]);
 
-  // Consume new achievements so they can trigger toasts
   const consumeNewAchievements = useCallback(() => {
     const copy = [...newAchievements];
     setNewAchievements([]);
@@ -702,7 +796,7 @@ export function useTrackerStore() {
   const setHabitNote = useCallback((habitId: string, note: string) => {
     updateData((prev) => ({
       ...prev,
-      habits: prev.habits.map((h) => h.id === habitId ? { ...h, note } : h),
+      habits: prev.habits.map((h) => (h.id === habitId ? { ...h, note } : h)),
     }));
   }, [updateData]);
 
@@ -723,9 +817,13 @@ export function useTrackerStore() {
     addFood,
     undoFood,
     removeFood,
-    setCalorieGoal,
-    todayCalories,
-    // Habits
+  setCalorieGoal,
+  todayCalories,
+  // Saved food library
+  savedFoods: data.savedFoods ?? [],
+  saveFoodToLibrary,
+  removeSavedFood,
+  // Habits
     toggleHabit,
     getHabitCompletion,
     addHabit,
