@@ -197,7 +197,7 @@ export default function AnalyticsScreen({ waterGoal, calorieGoal, waterHistory, 
       {/* Period Toggle + Comparison Toggle */}
       <motion.div variants={item} className="flex gap-2 mb-4">
         <div className="flex-1 p-1 rounded-xl relative" style={{ backgroundColor: '#1a1a2e', ...CARD_STYLE }}>
-          <motion.div className="absolute top-1 bottom-1 rounded-lg pointer-events-none" style={{ width: 'calc(50% - 4px)', left: period === 'weekly' ? '4px' : 'calc(50%)', background: 'linear-gradient(135deg, #3b82f6, #60a5fa)', boxShadow: '0 2px 10px rgba(59,130,246,0.3)' }} transition={{ type: 'spring', stiffness: 350, damping: 30 }} />
+          <motion.div className="absolute top-1 bottom-1 rounded-lg pointer-events-none" style={{ width: 'calc(50% - 4px)', left: period === 'weekly' ? '4px' : 'calc(50% + 4px)', background: 'linear-gradient(135deg, #3b82f6, #60a5fa)', boxShadow: '0 2px 10px rgba(59,130,246,0.3)' }} transition={{ type: 'spring', stiffness: 350, damping: 30 }} />
           <button onClick={() => setPeriod('weekly')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all relative z-10 cursor-pointer ${period === 'weekly' ? 'text-white' : 'text-[#8a8a9f]'}`}>Weekly</button>
           <button onClick={() => setPeriod('monthly')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all relative z-10 cursor-pointer ${period === 'monthly' ? 'text-white' : 'text-[#8a8a9f]'}`}>Monthly</button>
         </div>
